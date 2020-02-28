@@ -5,7 +5,7 @@
 # License: BSD 3 clause
 
 import numpy as np
-
+import time
 from mlrose_hiive.algorithms.decay import GeomDecay
 from mlrose_hiive.decorators import short_name
 
@@ -14,7 +14,8 @@ from mlrose_hiive.decorators import short_name
 def simulated_annealing(problem, schedule=GeomDecay(), max_attempts=10,
                         max_iters=np.inf, init_state=None, curve=False,
                         random_state=None,
-                        state_fitness_callback=None, callback_user_info=None):
+                        state_fitness_callback=None, callback_user_info=None,
+                        timing=False):
     """Use simulated annealing to find the optimum for a given
     optimization problem.
     Parameters
@@ -37,6 +38,11 @@ def simulated_annealing(problem, schedule=GeomDecay(), max_attempts=10,
         If :code:`False`, then no curve is stored.
         If :code:`True`, then a history of fitness values is provided as a
         third return value.
+    timing: bool, default: False
+        Boolean to keep timing values for a curve.
+        If :code:`False`, then no curve is stored.
+        If :code:`True`, then a history of timing values is provided as a
+        forth return value.
     random_state: int, default: None
         If random_state is a positive integer, random_state is the seed used
         by np.random.seed(); otherwise, the random seed is not set.
@@ -55,6 +61,9 @@ def simulated_annealing(problem, schedule=GeomDecay(), max_attempts=10,
     fitness_curve: array
         Numpy array containing the fitness at every iteration.
         Only returned if input argument :code:`curve` is :code:`True`.
+    timing_curve: array
+        Numpy array containing the timing at every iteration.
+        Only returned if input argument :code:`timing` amd :code:'curve' are both :code:`True`.
     References
     ----------
     Russell, S. and P. Norvig (2010). *Artificial Intelligence: A Modern
@@ -89,7 +98,10 @@ def simulated_annealing(problem, schedule=GeomDecay(), max_attempts=10,
                                user_data=callback_user_info)
 
     fitness_curve = []
+    timing_curve = []
 
+    t0 = 0.
+    dt = 0.
     attempts = 0
     iters = 0
     continue_iterating = True
@@ -97,6 +109,9 @@ def simulated_annealing(problem, schedule=GeomDecay(), max_attempts=10,
     while (attempts < max_attempts) and (iters < max_iters):
         temp = schedule.evaluate(iters)
         iters += 1
+
+        if timing:
+            t0 = time.time()
 
         if temp == 0:
             break
@@ -119,8 +134,12 @@ def simulated_annealing(problem, schedule=GeomDecay(), max_attempts=10,
             else:
                 attempts += 1
 
+
         if curve:
             fitness_curve.append(problem.get_adjusted_fitness())
+            if timing:
+                dt = time.time() - t0
+                timing_curve.append(dt)
 
         # invoke callback
         if state_fitness_callback is not None:
@@ -141,6 +160,9 @@ def simulated_annealing(problem, schedule=GeomDecay(), max_attempts=10,
     best_state = problem.get_state()
 
     if curve:
-        return best_state, best_fitness, np.asarray(fitness_curve)
+        if timing:
+            return best_state, best_fitness, np.asarray(fitness_curve), np.asarray(timing_curve)*1000.
+        else:
+            return best_state, best_fitness, np.asarray(fitness_curve)
 
-    return best_state, best_fitness, None
+    return best_state, best_fitness, None, None

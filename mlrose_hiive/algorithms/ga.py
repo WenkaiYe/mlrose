@@ -3,7 +3,7 @@
 
 # Author: Genevieve Hayes (modified by Andrew Rollings)
 # License: BSD 3 clause
-
+import time
 import numpy as np
 
 from mlrose_hiive.decorators import short_name
@@ -50,7 +50,8 @@ def genetic_alg(problem, pop_size=200, pop_breed_percent=0.75, elite_dreg_ratio=
                 minimum_elites=0, minimum_dregs=0, mutation_prob=0.1,
                 max_attempts=10, max_iters=np.inf, curve=False, random_state=None,
                 state_fitness_callback=None, callback_user_info=None,
-                hamming_factor=0.0, hamming_decay_factor=None):
+                hamming_factor=0.0, hamming_decay_factor=None,
+                timing=False):
     """Use a standard genetic algorithm to find the optimum for a given
     optimization problem.
     Parameters
@@ -84,6 +85,11 @@ def genetic_alg(problem, pop_size=200, pop_breed_percent=0.75, elite_dreg_ratio=
         If :code:`False`, then no curve is stored.
         If :code:`True`, then a history of fitness values is provided as a
         third return value.
+    timing: bool, default: False
+        Boolean to keep timing values for a curve.
+        If :code:`False`, then no curve is stored.
+        If :code:`True`, then a history of timing values is provided as a
+        forth return value.
     random_state: int, default: None
         If random_state is a positive integer, random_state is the seed used
         by np.random.seed(); otherwise, the random seed is not set.
@@ -103,6 +109,9 @@ def genetic_alg(problem, pop_size=200, pop_breed_percent=0.75, elite_dreg_ratio=
         Numpy array of arrays containing the fitness of the entire population
         at every iteration.
         Only returned if input argument :code:`curve` is :code:`True`.
+    timing_curve: array
+        Numpy array containing the timing at every iteration.
+        Only returned if input argument :code:`timing` amd :code:'curve' are both :code:`True`.
     References
     ----------
     Russell, S. and P. Norvig (2010). *Artificial Intelligence: A Modern
@@ -142,6 +151,7 @@ def genetic_alg(problem, pop_size=200, pop_breed_percent=0.75, elite_dreg_ratio=
         np.random.seed(random_state)
 
     fitness_curve = []
+    timing_curve = []
 
     # Initialize problem, population and attempts counter
     problem.reset()
@@ -165,7 +175,8 @@ def genetic_alg(problem, pop_size=200, pop_breed_percent=0.75, elite_dreg_ratio=
 
     attempts = 0
     iters = 0
-
+    t0 = 0.
+    dt = 0.
     # initialize survivor count, elite count and dreg count
     survivors_size = pop_size - breeding_pop_size
     dregs_size = max(int(survivors_size * (1.0 - elite_dreg_ratio)) if survivors_size > 1 else 0, minimum_dregs)
@@ -177,6 +188,8 @@ def genetic_alg(problem, pop_size=200, pop_breed_percent=0.75, elite_dreg_ratio=
     continue_iterating = True
     while (attempts < max_attempts) and (iters < max_iters):
         iters += 1
+
+        t0 = time.time()
 
         # Calculate breeding probabilities
         problem.eval_mate_probs()
@@ -219,8 +232,14 @@ def genetic_alg(problem, pop_size=200, pop_breed_percent=0.75, elite_dreg_ratio=
         else:
             attempts += 1
 
+        if timing:
+            dt = time.time() - t0
+
         if curve:
             fitness_curve.append(problem.get_adjusted_fitness())
+            if timing:
+                timing_curve.append(dt)
+
 
         # invoke callback
         if state_fitness_callback is not None:
@@ -246,6 +265,9 @@ def genetic_alg(problem, pop_size=200, pop_breed_percent=0.75, elite_dreg_ratio=
     best_state = problem.get_state()
 
     if curve:
-        return best_state, best_fitness, np.asarray(fitness_curve)
+        if timing:
+            return best_state, best_fitness, np.asarray(fitness_curve), np.asarray(timing_curve)*1000.
+        else:
+            return best_state, best_fitness, np.asarray(fitness_curve)
 
-    return best_state, best_fitness, None
+    return best_state, best_fitness, None, None

@@ -5,14 +5,15 @@
 # License: BSD 3 clause
 
 import numpy as np
-
+import time
 from mlrose_hiive.decorators import short_name
 
 
 @short_name('mimic')
 def mimic(problem, pop_size=200, keep_pct=0.2, max_attempts=10,
           max_iters=np.inf, curve=False, random_state=None,
-          state_fitness_callback=None, callback_user_info=None, noise=0.0):
+          state_fitness_callback=None, callback_user_info=None, noise=0.0,
+          timing=False):
     """Use MIMIC to find the optimum for a given optimization problem.
     Parameters
     ----------
@@ -33,6 +34,11 @@ def mimic(problem, pop_size=200, keep_pct=0.2, max_attempts=10,
         If :code:`False`, then no curve is stored.
         If :code:`True`, then a history of fitness values is provided as a
         third return value.
+    timing: bool, default: False
+        Boolean to keep timing values for a curve.
+        If :code:`False`, then no curve is stored.
+        If :code:`True`, then a history of timing values is provided as a
+        forth return value.
     random_state: int, default: None
         If random_state is a positive integer, random_state is the seed used
         by np.random.seed(); otherwise, the random seed is not set.
@@ -51,6 +57,9 @@ def mimic(problem, pop_size=200, keep_pct=0.2, max_attempts=10,
     fitness_curve: array
         Numpy array containing the fitness at every iteration.
         Only returned if input argument :code:`curve` is :code:`True`.
+    timing_curve: array
+        Numpy array containing the timing at every iteration.
+        Only returned if input argument :code:`timing` amd :code:'curve' are both :code:`True`.
     References
     ----------
     De Bonet, J., C. Isbell, and P. Viola (1997). MIMIC: Finding Optima by
@@ -92,6 +101,7 @@ def mimic(problem, pop_size=200, keep_pct=0.2, max_attempts=10,
         np.random.seed(random_state)
 
     fitness_curve = []
+    timing_curve = []
 
     # Initialize problem, population and attempts counter
     problem.reset()
@@ -105,10 +115,15 @@ def mimic(problem, pop_size=200, keep_pct=0.2, max_attempts=10,
                                user_data=callback_user_info)
     attempts = 0
     iters = 0
+    t0 = 0.
+    dt = 0.
 
     continue_iterating = True
     while (attempts < max_attempts) and (iters < max_iters):
         iters += 1
+
+        if timing:
+            t0 = time.time()
 
         # Get top n percent of population
         problem.find_top_pct(keep_pct)
@@ -133,8 +148,13 @@ def mimic(problem, pop_size=200, keep_pct=0.2, max_attempts=10,
         else:
             attempts += 1
 
+        if timing:
+            dt = time.time() - t0
+
         if curve:
             fitness_curve.append(problem.get_adjusted_fitness())
+            if timing:
+                timing_curve.append(dt)
 
         # invoke callback
         if state_fitness_callback is not None:
@@ -154,6 +174,9 @@ def mimic(problem, pop_size=200, keep_pct=0.2, max_attempts=10,
     best_state = problem.get_state().astype(int)
 
     if curve:
-        return best_state, best_fitness, np.asarray(fitness_curve)
+        if timing:
+            return best_state, best_fitness, np.asarray(fitness_curve), np.asarray(timing_curve)*1000.
+        else:
+            return best_state, best_fitness, np.asarray(fitness_curve)
 
-    return best_state, best_fitness, None
+    return best_state, best_fitness, None, None
