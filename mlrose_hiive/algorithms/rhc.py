@@ -179,6 +179,6 @@ def random_hill_climb(problem, max_attempts=10, max_iters=np.inf, restarts=0,
         if timing:
             return best_state, best_fitness, np.asarray(best_fitness_curve), np.asarray(best_timing_curve)*1000.
         else:
-            return best_state, best_fitness, np.asarray(best_fitness_curve)
+            return best_state, best_fitness, np.asarray(best_fitness_curve), None
 
     return best_state, best_fitness, None, None

@@ -27,7 +27,7 @@ class _NNCore(_NNBase):
     def __init__(self, hidden_nodes=None, activation='relu', algorithm='random_hill_climb', max_iters=100, bias=True,
                  is_classifier=True, learning_rate=0.1, early_stopping=False, clip_max=1e+10, restarts=0,
                  schedule=GeomDecay(), pop_size=200, mutation_prob=0.1, max_attempts=10, random_state=None,
-                 curve=False):
+                 curve=False, timing=False):
 
         super().__init__()
         if hidden_nodes is None:
@@ -54,6 +54,7 @@ class _NNCore(_NNBase):
         self.max_attempts = max_attempts
         self.random_state = random_state
         self.curve = curve
+        self.timing = timing
 
         self.node_list = []
         self.fitted_weights = []
@@ -61,6 +62,7 @@ class _NNCore(_NNBase):
         self.output_activation = None
         self.predicted_probs = []
         self.fitness_curve = []
+        self.timing_curve = []
 
     def _validate(self):
         if (not isinstance(self.max_iters, int) and self.max_iters != np.inf
@@ -149,13 +151,15 @@ class _NNCore(_NNBase):
                                                                     self.clip_max,
                                                                     self.is_classifier)
 
+        timing_curve = []
+
         if self.algorithm == 'random_hill_climb':
-            fitness_curve, fitted_weights, loss = self.__run_with_rhc(init_weights, num_nodes, problem)
+            fitness_curve, fitted_weights, loss, timing_curve = self.__run_with_rhc(init_weights, num_nodes, problem)
 
         elif self.algorithm == 'simulated_annealing':
-            fitness_curve, fitted_weights, loss = self._run_with_sa(init_weights, num_nodes, problem)
+            fitness_curve, fitted_weights, loss, timing_curve = self._run_with_sa(init_weights, num_nodes, problem)
         elif self.algorithm == 'genetic_alg':
-            fitness_curve, fitted_weights, loss = self._run_with_ga(problem)
+            fitness_curve, fitted_weights, loss, timing_curve = self._run_with_ga(problem)
         else:  # Gradient descent case
             fitness_curve, fitted_weights, loss = self._run_with_gd(init_weights, num_nodes, problem)
 
@@ -167,6 +171,8 @@ class _NNCore(_NNBase):
 
         if self.curve:
             self.fitness_curve = fitness_curve
+            self.timing_curve = timing_curve
+
 
         return self
 
@@ -185,15 +191,16 @@ class _NNCore(_NNBase):
 
     def _run_with_ga(self, problem):
         fitness_curve = []
+        timing_curve = []
         if self.curve:
-            fitted_weights, loss, fitness_curve, _, _ = genetic_alg(
+            fitted_weights, loss, fitness_curve, timing_curve = genetic_alg(
                 problem,
                 pop_size=self.pop_size,
                 mutation_prob=self.mutation_prob,
                 max_attempts=self.max_attempts if self.early_stopping else
                 self.max_iters,
                 max_iters=self.max_iters,
-                curve=self.curve)
+                curve=self.curve, timing=self.timing)
         else:
             fitted_weights, loss, _, _ = genetic_alg(
                 problem,
@@ -201,22 +208,23 @@ class _NNCore(_NNBase):
                 max_attempts=self.max_attempts if self.early_stopping else
                 self.max_iters,
                 max_iters=self.max_iters,
-                curve=self.curve)
-        return fitness_curve, fitted_weights, loss
+                curve=self.curve, timing=self.timing)
+        return fitness_curve, fitted_weights, loss, timing_curve
 
     def _run_with_sa(self, init_weights, num_nodes, problem):
         fitness_curve = []
+        timing_curve = []
         if init_weights is None:
             init_weights = np.random.uniform(-1, 1, num_nodes)
         if self.curve:
-            fitted_weights, loss, fitness_curve, _ = simulated_annealing(
+            fitted_weights, loss, fitness_curve, timing_curve = simulated_annealing(
                 problem,
                 schedule=self.schedule,
                 max_attempts=self.max_attempts if self.early_stopping else
                 self.max_iters,
                 max_iters=self.max_iters,
                 init_state=init_weights,
-                curve=self.curve)
+                curve=self.curve, timing=self.timing)
         else:
             fitted_weights, loss, _, _ = simulated_annealing(
                 problem,
@@ -225,12 +233,13 @@ class _NNCore(_NNBase):
                 self.max_iters,
                 max_iters=self.max_iters,
                 init_state=init_weights,
-                curve=self.curve)
-        return fitness_curve, fitted_weights, loss
+                curve=self.curve, timing=self.timing)
+        return fitness_curve, fitted_weights, loss, timing_curve
 
     def __run_with_rhc(self, init_weights, num_nodes, problem):
         fitness_curve = []
         fitted_weights = []
+        timing_curve = []
         loss = np.inf
         # Can't use restart feature of random_hill_climb function, since
         # want to keep initial weights in the range -1 to 1.
@@ -239,26 +248,26 @@ class _NNCore(_NNBase):
                 init_weights = np.random.uniform(-1, 1, num_nodes)
 
             if self.curve:
-                current_weights, current_loss, fitness_curve = \
+                current_weights, current_loss, fitness_curve, timing_curve = \
                     random_hill_climb(problem,
                                       max_attempts=self.max_attempts if
                                       self.early_stopping else
                                       self.max_iters,
                                       max_iters=self.max_iters,
                                       restarts=0, init_state=init_weights,
-                                      curve=self.curve)
+                                      curve=self.curve, timing=self.timing)
             else:
                 current_weights, current_loss, _, _ = random_hill_climb(
                     problem,
                     max_attempts=self.max_attempts if self.early_stopping
                     else self.max_iters,
                     max_iters=self.max_iters,
-                    restarts=0, init_state=init_weights, curve=self.curve)
+                    restarts=0, init_state=init_weights, curve=self.curve, timing=self.timing)
 
             if current_loss < loss:
                 fitted_weights = current_weights
                 loss = current_loss
-        return fitness_curve, fitted_weights, loss
+        return fitness_curve, fitted_weights, loss, timing_curve
 
     def predict(self, X):
         """Use model to predict data labels for given feature array.
